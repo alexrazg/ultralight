@@ -11,22 +11,22 @@
 // CONDITIONS OF ANY KIND, either express or implied. See the License for the 
 // specific language governing permissions and limitations under the License.
 
+using NLog;
+
 namespace Ultralight
 {
     using System;
     using System.Collections.Concurrent;
     using System.Linq;
-    using System.Reflection;
     using Listeners;
     using MessageStore;
-    using log4net;
 
     /// <summary>
     ///   Stomp message queue
     /// </summary>
     public class StompQueue
     {
-        private static readonly ILog Log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
+        private static readonly Logger logger = LogManager.GetCurrentClassLogger();
 
         private class SubscriptionMetadata
         {
@@ -81,11 +81,11 @@ namespace Ultralight
         /// <param name = "subscriptionId">The subscription id.</param>
         public void AddClient(IStompClient client, string subscriptionId)
         {
-            Log.Info(string.Format("Adding client: {0}", client.SessionId));
+            logger.Info("Adding client: {0}", client.SessionId);
 
             if (_clients.ContainsKey(client))
             {
-                Log.Info(string.Format("Duplicate client found: {0}", client.SessionId));
+                logger.Info("Duplicate client found: {0}", client.SessionId);
                 return;
             }
 
@@ -113,11 +113,11 @@ namespace Ultralight
         /// <param name = "client">The client.</param>
         public void RemoveClient(IStompClient client)
         {
-            Log.Info(string.Format("Removing client {0}", client.SessionId));
+            logger.Info("Removing client {0}", client.SessionId);
 
             if (!_clients.ContainsKey(client))
             {
-                Log.Info(string.Format("Client to remove not found {0}", client.SessionId));
+                logger.Info("Client to remove not found {0}", client.SessionId);
                 return;
             }
 
@@ -136,11 +136,11 @@ namespace Ultralight
         /// <param name = "message">The message.</param>
         public void Publish(string message)
         {
-            Log.Info(string.Format("Publishing message to queue {0}", Address));
+            logger.Info("Publishing message to queue {0}", Address);
 
             if (_clients.IsEmpty)
             {
-                Log.Info("No clients connected, storing message");
+                logger.Info("No clients connected, storing message");
                 Store.Enqueue(message);
                 return;
             }
@@ -156,8 +156,8 @@ namespace Ultralight
 
         private void SendMessage(IStompClient client, string body, Guid messageId, string subscriptionId)
         {
-            Log.Info(string.Format("Sending message to {0}", client.SessionId));
-            Log.Debug(string.Format("message {0}", body));
+            logger.Info("Sending message to {0}", client.SessionId);
+            logger.Debug("message {0}", body);
 
             var stompMessage = new StompMessage("MESSAGE", body);
             stompMessage["message-id"] = messageId.ToString();

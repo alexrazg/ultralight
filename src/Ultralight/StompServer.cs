@@ -11,22 +11,22 @@
 // CONDITIONS OF ANY KIND, either express or implied. See the License for the 
 // specific language governing permissions and limitations under the License.
 
+using NLog;
+
 namespace Ultralight
 {
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using System.Reflection;
     using Listeners;
     using MessageStore;
-    using log4net;
 
     /// <summary>
     ///   A small and light STOMP message broker
     /// </summary>
     public class StompServer
     {
-        private static readonly ILog Log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
+        private static readonly Logger logger = LogManager.GetCurrentClassLogger();
         private readonly IDictionary<string, Action<IStompClient, StompMessage>> _actions;
         private readonly List<IStompListener> _listener = new List<IStompListener>();
         private readonly List<StompQueue> _queues = new List<StompQueue>();
@@ -110,17 +110,17 @@ namespace Ultralight
                 client.SessionId= Guid.NewGuid();
             }
 
-            Log.Info(string.Format("Processing command: {0} from client {1}", message.Command, client.SessionId));
+            logger.Info("Processing command: {0} from client {1}", message.Command, client.SessionId);
             
             if (!_actions.ContainsKey(message.Command))
             {
-                Log.Warn( string.Format("Client {0} sended an unknown command: {1}", client.SessionId, message.Command));
+                logger.Warn("Client {0} sended an unknown command: {1}", client.SessionId, message.Command);
                 return;
             }
 
             if (message.Command != "CONNECT" && client.IsConnected() == false)
             {
-                Log.Info(string.Format("Client {0} was not connected before sending command: {1}", client.SessionId, message.Command));
+                logger.Info("Client {0} was not connected before sending command: {1}", client.SessionId, message.Command);
 
                 client.Send(new StompMessage("ERROR", "Please connect before sending '" + message.Command + "'"));
                 return;
