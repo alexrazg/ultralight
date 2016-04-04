@@ -51,6 +51,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ClientExtensions.cs" />
+    <Compile Include="IStompPublisher.cs" />
     <Compile Include="Listeners\IWebSocketConfig.cs" />
     <Compile Include="Listeners\StompInMemoryClient.cs" />
     <Compile Include="Listeners\IStompClient.cs" />

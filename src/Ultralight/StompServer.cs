@@ -11,6 +11,7 @@
 // CONDITIONS OF ANY KIND, either express or implied. See the License for the 
 // specific language governing permissions and limitations under the License.
 
+using System.Collections.Concurrent;
 using NLog;
 
 namespace Ultralight
@@ -24,12 +25,14 @@ namespace Ultralight
     /// <summary>
     ///   A small and light STOMP message broker
     /// </summary>
-    public class StompServer
+    public class StompServer : IStompPublisher
     {
         private static readonly Logger logger = LogManager.GetCurrentClassLogger();
         private readonly IDictionary<string, Action<IStompClient, StompMessage>> _actions;
         private readonly List<IStompListener> _listener = new List<IStompListener>();
-        private readonly List<StompQueue> _queues = new List<StompQueue>();
+        
+        // address to queue
+        private readonly ConcurrentDictionary<string, StompQueue> _queues = new ConcurrentDictionary<string, StompQueue>(); 
 
         private Func<IMessageStore> _messageStoreBuilder = () => new InMemoryMessageStore();
 
@@ -64,7 +67,7 @@ namespace Ultralight
         /// </summary>
         public StompQueue[] Queues
         {
-            get { return _queues.ToArray(); }
+            get { return _queues.Values.ToArray(); }
         }
 
         /// <summary>
@@ -91,7 +94,11 @@ namespace Ultralight
         /// </summary>
         public void Stop()
         {
-            _queues.ForEach(queue => queue.Clients.ToList().ForEach(client => client.Close()));
+            foreach (StompQueue queue in _queues.Values)
+            {
+                queue.Clients.ToList().ForEach(client => client.Close());
+            }
+
             _queues.Clear();
             _listener.ForEach(l => l.Stop());
         }
@@ -158,7 +165,7 @@ namespace Ultralight
         {
             string destination = message["destination"];
 
-            var queue = _queues.FirstOrDefault(s => s.Address == destination) ?? AddNewQueue(destination);
+            StompQueue queue = _queues.GetOrAdd(destination, AddNewQueue(destination));
 
             queue.AddClient(client, message["id"]);
         }
@@ -173,8 +180,8 @@ namespace Ultralight
             string destination = message["destination"];
 
             if (string.IsNullOrEmpty(destination)) return;
-            var queue = _queues.FirstOrDefault(q => q.Address == destination);
-            if (queue == null || queue.Clients.Contains(client) == false)
+            StompQueue queue;
+            if (!_queues.TryGetValue(destination, out queue) || !queue.Clients.Contains(client))
             {
                 client.Send(new StompMessage("ERROR", "You are not subscribed to queue '" + destination + "'"));
                 return;
@@ -192,7 +199,7 @@ namespace Ultralight
         {
             var destination = message["destination"];
 
-            var queue = _queues.FirstOrDefault(s => s.Address == destination) ?? AddNewQueue(destination);
+            StompQueue queue = _queues.GetOrAdd(destination, AddNewQueue(destination));
 
             queue.Publish(message.Body);
         }
@@ -204,7 +211,7 @@ namespace Ultralight
         /// <param name="message">The message.</param>
         public void OnStompDisconnect(IStompClient client, StompMessage message)
         {
-            var stompQueues = _queues.Where(q => q.Clients.Contains(client)).ToList();
+            var stompQueues = _queues.Values.Where(q => q.Clients.Contains(client)).ToList();
             stompQueues.ForEach(q => q.RemoveClient(client));
         }
 
@@ -221,19 +228,24 @@ namespace Ultralight
                     q =>
                     {
                         q.OnLastClientRemoved = null;
-                        lock (this)
-                        {
-                            _queues.Remove(q);
-                        }
+                        StompQueue deletedQueue;
+                        _queues.TryRemove(q.Address, out deletedQueue);
                     }
             };
 
-            lock (this)
-            {
-                _queues.Add(queue);
-            }
-            return queue;
+            return _queues.GetOrAdd(queue.Address, queue);
         }
 
+        public void PublishMessage(string message, string destination)
+        {
+            StompQueue queue;
+            if (!_queues.TryGetValue(destination, out queue))
+            {
+                //nobody listens
+                return;
+            }
+
+            queue.Publish(message);
+        }
     }
 }
