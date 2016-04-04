@@ -11,6 +11,8 @@
 // CONDITIONS OF ANY KIND, either express or implied. See the License for the 
 // specific language governing permissions and limitations under the License.
 
+using NLog;
+
 namespace Ultralight.Listeners
 {
     using System;
@@ -22,6 +24,8 @@ namespace Ultralight.Listeners
     public class StompWebsocketListener
         : IStompListener
     {
+        private static readonly Logger logger = LogManager.GetCurrentClassLogger();
+
         private readonly WebSocketServer _server;
 
         /// <summary>
@@ -31,6 +35,22 @@ namespace Ultralight.Listeners
         public StompWebsocketListener(string address)
         {
             _server = new WebSocketServer(address);
+        }
+
+        public StompWebsocketListener(IWebSocketConfig config)
+        {
+            UriBuilder builder = new UriBuilder
+            {
+                Scheme = "ws",
+                Host = "0.0.0.0",
+                Port = config.WebSocketListenPort,
+                Path = config.WebSocketPath
+            };
+            string uri = builder.ToString();
+
+            logger.Info("Starting webSocketListener on {0}", uri);
+
+            _server = new WebSocketServer(uri);
         }
 
         #region IStompListener Members
